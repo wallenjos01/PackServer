@@ -1,0 +1,31 @@
+kind: pipeline
+type: kubernetes
+name: default
+steps:
+  - name: docker
+    image: plugins/docker
+    settings:
+      registry: docker.wallentines.org
+      repo: docker.wallentines.org/matchmaker
+      tags:
+        - snapshot
+      username:
+        from_secret: DOCKER_USER
+      password:
+        from_secret: DOCKER_PASS
+  - name: docker-tag
+    image: plugins/docker
+    when:
+      event: tag
+    settings:
+      dockerfile: build/Dockerfile
+      context: build/
+      registry: docker.wallentines.org
+      repo: docker.wallentines.org/matchmaker
+      tags:
+        - latest
+        - ${DRONE_TAG##v}
+      username:
+        from_secret: DOCKER_USER
+      password:
+        from_secret: DOCKER_PASS
