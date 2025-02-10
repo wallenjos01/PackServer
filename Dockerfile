@@ -4,7 +4,7 @@ COPY . /src
 
 RUN set -eux; \
     cd /src; \
-    gradle :build
+    gradle build
 
 
 FROM eclipse-temurin:21
