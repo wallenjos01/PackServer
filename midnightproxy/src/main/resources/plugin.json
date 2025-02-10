@@ -1,0 +1,5 @@
+{
+  "name": "PackUploader",
+  "version": "${version}",
+  "main": "org.wallentines.packserver.PackServerPlugin"
+}
