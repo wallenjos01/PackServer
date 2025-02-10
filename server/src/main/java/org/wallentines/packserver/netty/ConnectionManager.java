@@ -55,7 +55,7 @@ public class ConnectionManager {
     }
 
     public void stop() {
-        this.listenChannel.channel().close().syncUninterruptibly();;
+        this.listenChannel.channel().close().syncUninterruptibly();
         this.bossGroup.shutdownGracefully();
     }
 

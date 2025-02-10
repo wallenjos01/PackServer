@@ -1,7 +1,6 @@
 package org.wallentines.packserver.netty;
 
 import io.netty.buffer.ByteBufUtil;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -51,6 +50,8 @@ public class HttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                 case "has" -> server.hasHandler().handle(req, ctx);
                 case "push" -> server.pushHandler().handle(req, ctx);
                 case "delete" -> server.deleteHandler().handle(req, ctx);
+                case "hash" -> server.hashHandler().handle(req, ctx);
+                case "tag" -> server.tagHandler().handle(req, ctx);
                 default -> new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.NOT_FOUND);
             };
             sendHttpResponse(ctx, req, res);

@@ -22,6 +22,7 @@ public class Main {
 
         Path cwd = Paths.get(System.getProperty("user.dir"));
         Path packDir = cwd.resolve("packs");
+        Path tagDir = cwd.resolve("tags");
 
         String portStr = System.getenv("PACK_SERVER_PORT");
         String baseUrlStr = System.getenv("PACK_SERVER_BASE_URL");
@@ -38,7 +39,10 @@ public class Main {
             }
         }
 
-        try { Files.createDirectories(packDir); } catch (IOException ex) {
+        try {
+            Files.createDirectories(packDir);
+            Files.createDirectories(tagDir);
+        } catch (IOException ex) {
             log.error("Could not generate pack storage directory", ex);
             return;
         }
@@ -59,7 +63,7 @@ public class Main {
             ks.setKey("jwt", KeyType.AES, key);
         }
 
-        WebServer ws = new WebServer(port, baseUrl, ks.supplier("jwt", KeyType.AES), packDir);
+        WebServer ws = new WebServer(port, baseUrl, ks.supplier("jwt", KeyType.AES), packDir, tagDir);
         try {
             ws.start();
         } catch (Throwable th) {

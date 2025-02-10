@@ -15,15 +15,15 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class DeleteHandler {
+public class TagHandler {
 
     private final WebServer server;
 
-    public DeleteHandler(WebServer server) {
+    public TagHandler(WebServer server) {
         this.server = server;
     }
 
-    // POST /delete
+    // POST /tag
     // token: <JWT>
     // hash: <hash>
     // tag: <tag>
@@ -57,10 +57,7 @@ public class DeleteHandler {
             return new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.BAD_REQUEST);
         }
 
-        if(tag != null) {
-            hash = server.tagManager().getHash(tag);
-        }
-        if(token == null || hash == null) {
+        if(hash == null || token == null || tag == null) {
             return new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.BAD_REQUEST);
         }
 
@@ -78,15 +75,7 @@ public class DeleteHandler {
             return new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.NOT_FOUND);
         }
 
-        try {
-            Files.delete(packFile);
-        } catch (IOException ex) {
-            return new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.INTERNAL_SERVER_ERROR);
-        }
-        if(tag != null) {
-            server.tagManager().removeTag(tag);
-        }
-
+        server.tagManager().pushTag(tag, hash);
         return new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.OK);
     }
 

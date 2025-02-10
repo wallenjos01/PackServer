@@ -15,6 +15,7 @@ public class HasHandler {
         this.server = server;
     }
 
+    // GET /has?tag=<TAG>
     // GET /has?hash=<HASH>
     public FullHttpResponse handle(FullHttpRequest req, ChannelHandlerContext ctx) {
 
@@ -23,24 +24,35 @@ public class HasHandler {
         }
 
         QueryStringDecoder decoder = new QueryStringDecoder(req.uri());
-        List<String> hashParam = decoder.parameters().get("hash");
-        if(hashParam == null || hashParam.isEmpty()) {
-            return new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.BAD_REQUEST);
+        FullHttpResponse response = getResponse(req, decoder, "tag", server.tagManager());
+        if(response == null) {
+            response = getResponse(req, decoder, "hash", server.packManager());
+        }
+        if(response == null) {
+            response = new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.BAD_REQUEST);
         }
 
-        String hash = hashParam.getFirst();
-        if(!Util.isHexadecimal(hash)) {
-            return new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.BAD_REQUEST);
+        return response;
+    }
+
+
+    private FullHttpResponse getResponse(FullHttpRequest req, QueryStringDecoder decoder, String param, FileSupplier supplier) {
+
+        List<String> paramData = decoder.parameters().get(param);
+        if(paramData == null || paramData.isEmpty()) {
+            return null;
         }
 
-        Path packFile = server.packDir().resolve(hash);
+        String name = paramData.getFirst();
+        Path file = supplier.get(name);
 
-        if(Files.exists(packFile)) {
-            return new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.OK);
-        } else {
+        if(file == null) {
+            return new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.BAD_REQUEST);
+        } else if(!Files.exists(file)) {
             return new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.NOT_FOUND);
         }
 
+        return new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.OK);
     }
 
 }
