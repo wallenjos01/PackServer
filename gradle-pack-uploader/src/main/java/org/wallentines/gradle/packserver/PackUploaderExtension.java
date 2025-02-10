@@ -17,6 +17,7 @@ import org.gradle.api.Task;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.wallentines.mdcfg.ConfigSection;
 import org.wallentines.mdcfg.codec.JSONCodec;
 import org.wallentines.mdcfg.serializer.ConfigContext;
@@ -41,8 +42,10 @@ import java.util.zip.ZipOutputStream;
 
 public class PackUploaderExtension {
 
-    private final Map<String, String> uploadUrls = new HashMap<>();
+    private final List<UploadInfo> uploadUrls = new ArrayList<>();
     private String description;
+
+    private record UploadInfo(String url, String token, @Nullable String tag) { }
 
     public PackUploaderExtension(Project project) {
 
@@ -61,8 +64,13 @@ public class PackUploaderExtension {
     public void uploadTo(String packServerUrl, String token) {
 
         if(!packServerUrl.endsWith("/")) packServerUrl = packServerUrl + "/";
+        this.uploadUrls.add(new UploadInfo(packServerUrl, token, null));
+    }
 
-        this.uploadUrls.put(packServerUrl, token);
+    public void uploadTo(String packServerUrl, String token, String tag) {
+
+        if(!packServerUrl.endsWith("/")) packServerUrl = packServerUrl + "/";
+        this.uploadUrls.add(new UploadInfo(packServerUrl, token, tag));
     }
 
 
@@ -172,25 +180,28 @@ public class PackUploaderExtension {
             }
 
             try(ExecutorService executor = Executors.newFixedThreadPool(Math.min(4, this.extension.uploadUrls.size()))) {
-                for (Map.Entry<String, String> ent : extension.uploadUrls.entrySet()) {
+                for (UploadInfo ent : extension.uploadUrls) {
                     executor.execute(() -> {
 
                         try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
-                            HttpGet get = new HttpGet(ent.getKey() + "has?hash=" + sha1);
+                            HttpGet get = new HttpGet(ent.url() + "has?hash=" + sha1);
 
                             HttpResponse res = client.execute(get);
                             if (res.getCode() == 200) return;
 
-                            HttpPost post = new HttpPost(ent.getKey() + "push");
-                            post.setEntity(MultipartEntityBuilder.create()
-                                    .addPart("token", new StringBody(ent.getValue(), ContentType.DEFAULT_TEXT))
-                                    .addPart("data", new FileBody(packFile.toFile(), ContentType.APPLICATION_OCTET_STREAM))
-                                    .build()
-                            );
+                            HttpPost post = new HttpPost(ent.url() + "push");
+                            MultipartEntityBuilder builder = MultipartEntityBuilder.create()
+                                    .addPart("token", new StringBody(ent.token(), ContentType.DEFAULT_TEXT))
+                                    .addPart("data", new FileBody(packFile.toFile(), ContentType.APPLICATION_OCTET_STREAM));
 
+                            if(ent.tag != null) {
+                                builder.addPart("tag", new StringBody(ent.tag, ContentType.DEFAULT_TEXT));
+                            }
+
+                            post.setEntity(builder.build());
                             res = client.execute(post);
                             if (res.getCode() != 200) {
-                                throw new RuntimeException("Could not upload resource pack to: " + ent.getKey());
+                                throw new RuntimeException("Could not upload resource pack to: " + ent.url);
                             }
 
                         } catch (IOException ex) {
