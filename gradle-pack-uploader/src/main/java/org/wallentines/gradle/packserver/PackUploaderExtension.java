@@ -36,8 +36,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -114,6 +116,16 @@ public class PackUploaderExtension {
             return outputHash;
         }
 
+        private ZipEntry zipEntry(String fileName) {
+
+            ZipEntry ze = new ZipEntry(fileName);
+            ze.setCreationTime(FileTime.from(Instant.EPOCH));
+            ze.setLastAccessTime(FileTime.from(Instant.EPOCH));
+            ze.setLastModifiedTime(FileTime.from(Instant.EPOCH));
+
+            return ze;
+        }
+
         @Override
         public void execute(Task task) {
 
@@ -156,7 +168,7 @@ public class PackUploaderExtension {
 
             try(ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(packFile))) {
 
-                zos.putNextEntry(new ZipEntry("pack.mcmeta"));
+                zos.putNextEntry(zipEntry("pack.mcmeta"));
                 String meta = JSONCodec.minified().encodeToString(ConfigContext.INSTANCE, packMeta);
                 zos.write(meta.getBytes());
                 zos.closeEntry();
@@ -166,7 +178,7 @@ public class PackUploaderExtension {
                     Files.walkFileTree(assetsDir, new SimpleFileVisitor<>() {
                         @Override
                         public @NotNull FileVisitResult visitFile(Path file, @NotNull BasicFileAttributes attrs) throws IOException {
-                            zos.putNextEntry(new ZipEntry("assets/" + assetsDir.relativize(file)));
+                            zos.putNextEntry(zipEntry("assets/" + assetsDir.relativize(file)));
                             try (InputStream is = Files.newInputStream(file)) {
                                 int bytesRead;
                                 while ((bytesRead = is.read(buffer)) != -1) {
