@@ -10,10 +10,13 @@ import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.core5.http.ContentType;
 import org.apache.hc.core5.http.HttpResponse;
+import org.apache.hc.core5.http.io.entity.ByteArrayEntity;
 import org.gradle.api.Action;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
+import org.gradle.api.file.RegularFileProperty;
+import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.jetbrains.annotations.NotNull;
@@ -26,6 +29,8 @@ import javax.inject.Inject;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -49,8 +54,10 @@ public class PackUploaderExtension {
 
     public PackUploaderExtension(Project project) {
 
+        project.getTasks().register("buildPack", BuildPackTask.class, this);
         project.getTasks().register("uploadPack", UploadTask.class, this);
         this.description = project.getRootProject().getName();
+
     }
 
     public String getDescription() {
@@ -73,23 +80,43 @@ public class PackUploaderExtension {
         this.uploadUrls.add(new UploadInfo(packServerUrl, token, tag));
     }
 
+    public static class BuildPackTask extends DefaultTask implements Action<Task> {
 
-
-    public static class UploadTask extends DefaultTask implements Action<Task> {
 
         private final PackUploaderExtension extension;
+        private final RegularFileProperty outputZip;
+        private final RegularFileProperty outputHash;
+
 
         @Inject
-        public UploadTask(PackUploaderExtension extension) {
-
+        public BuildPackTask(PackUploaderExtension extension) {
             this.extension = extension;
+            Path packDir = getProject().getLayout().getBuildDirectory().getAsFile().get().toPath().resolve("packs");
+
+            this.outputZip = getProject().getObjects().fileProperty();
+            this.outputHash = getProject().getObjects().fileProperty();
+
+            outputZip.fileValue(packDir.resolve("resources.zip").toFile());
+            outputHash.fileValue(packDir.resolve("resources.sha1").toFile());
+
             this.dependsOn("remapJar");
             this.dependsOn("processResources");
             this.setActions(List.of(this));
         }
 
+        @OutputFile
+        public RegularFileProperty getOutputZip() {
+            return outputZip;
+        }
+
+        @OutputFile
+        public RegularFileProperty getOutputHash() {
+            return outputHash;
+        }
+
         @Override
-        public void execute(@NotNull Task task) {
+        public void execute(Task task) {
+
 
             Project project = getProject();
             SourceSetContainer sourceSets = project.getExtensions().getByType(SourceSetContainer.class);
@@ -122,13 +149,11 @@ public class PackUploaderExtension {
 
 
             // Export resource pack
-            Path packDir = project.getLayout().getBuildDirectory().getAsFile().get().toPath().resolve("packs");
-
-            try { Files.createDirectories(packDir); } catch (IOException ex) {
+            Path packFile = this.outputZip.getAsFile().get().toPath();
+            try { Files.createDirectories(packFile.getParent()); } catch (IOException ex) {
                 throw new RuntimeException(ex);
             }
 
-            Path packFile = packDir.resolve("resources.zip");
             try(ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(packFile))) {
 
                 zos.putNextEntry(new ZipEntry("pack.mcmeta"));
@@ -174,9 +199,47 @@ public class PackUploaderExtension {
                 throw new RuntimeException(ex);
             }
 
+
+            Path sha1File = this.outputHash.getAsFile().get().toPath();
+            try { Files.createDirectories(sha1File.getParent()); } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+            try(OutputStream os = Files.newOutputStream(sha1File)) {
+                os.write(sha1.getBytes());
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+    }
+
+
+    public static class UploadTask extends DefaultTask implements Action<Task> {
+
+        private final PackUploaderExtension extension;
+
+        @Inject
+        public UploadTask(PackUploaderExtension extension) {
+            this.extension = extension;
+            this.dependsOn("buildPack");
+            this.setActions(List.of(this));
+        }
+
+        @Override
+        public void execute(@NotNull Task task) {
+
+            Project project = getProject();
+            BuildPackTask bpt = (BuildPackTask) project.getTasks().getByName("buildPack");
+
             // Upload pack
             if(this.extension.uploadUrls.isEmpty()) {
                 return;
+            }
+
+            String sha1;
+            try(InputStream is = Files.newInputStream(bpt.outputHash.getAsFile().get().toPath())) {
+                sha1 = new String(is.readAllBytes());
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
             }
 
             try(ExecutorService executor = Executors.newFixedThreadPool(Math.min(4, this.extension.uploadUrls.size()))) {
@@ -187,21 +250,35 @@ public class PackUploaderExtension {
                             HttpGet get = new HttpGet(ent.url() + "has?hash=" + sha1);
 
                             HttpResponse res = client.execute(get);
-                            if (res.getCode() == 200) return;
+                            if (res.getCode() == 200) { // Already uploaded
 
-                            HttpPost post = new HttpPost(ent.url() + "push");
-                            MultipartEntityBuilder builder = MultipartEntityBuilder.create()
-                                    .addPart("token", new StringBody(ent.token(), ContentType.DEFAULT_TEXT))
-                                    .addPart("data", new FileBody(packFile.toFile(), ContentType.APPLICATION_OCTET_STREAM));
+                                if(ent.tag == null) return;
 
-                            if(ent.tag != null) {
-                                builder.addPart("tag", new StringBody(ent.tag, ContentType.DEFAULT_TEXT));
-                            }
+                                HttpPost post = new HttpPost(ent.url());
+                                String data = JSONCodec.minified().encodeToString(ConfigContext.INSTANCE, new ConfigSection()
+                                        .with("token", ent.token)
+                                        .with("hash", sha1)
+                                        .with("tag", ent.tag));
+                                byte[] bytes = data.getBytes(StandardCharsets.UTF_8);
+                                post.setEntity(new ByteArrayEntity(bytes, ContentType.APPLICATION_JSON));
+                                client.execute(post);
 
-                            post.setEntity(builder.build());
-                            res = client.execute(post);
-                            if (res.getCode() != 200) {
-                                throw new RuntimeException("Could not upload resource pack to: " + ent.url);
+                            } else {
+
+                                HttpPost post = new HttpPost(ent.url() + "push");
+                                MultipartEntityBuilder builder = MultipartEntityBuilder.create()
+                                        .addPart("token", new StringBody(ent.token(), ContentType.DEFAULT_TEXT))
+                                        .addPart("data", new FileBody(bpt.outputZip.getAsFile().get(), ContentType.APPLICATION_OCTET_STREAM));
+
+                                if(ent.tag != null) {
+                                    builder.addPart("tag", new StringBody(ent.tag, ContentType.DEFAULT_TEXT));
+                                }
+
+                                post.setEntity(builder.build());
+                                res = client.execute(post);
+                                if (res.getCode() != 200) {
+                                    throw new RuntimeException("Could not upload resource pack to: " + ent.url);
+                                }
                             }
 
                         } catch (IOException ex) {
