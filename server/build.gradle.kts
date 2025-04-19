@@ -7,7 +7,7 @@ configurations["shadow"].extendsFrom(configurations["implementation"])
 
 dependencies {
 
-    implementation(libs.midnight.proxy.jwt)
+    implementation(libs.jwtutil)
 
     implementation(libs.netty.buffer)
     implementation(libs.netty.codec)

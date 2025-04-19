@@ -3,10 +3,11 @@ junit = "5.10.2"
 slf4j = "2.0.16"
 jbr-anno = "24.0.1"
 netty = "4.1.117.Final"
-mdconfig = "3.0.0"
-mdproxy = "0.7.1"
+mdconfig = "3.4.0"
+mdproxy = "0.9.0"
 logback = "1.5.8"
 apache = "5.4.2"
+jwtutil = "0.1.0"
 
 [libraries]
 jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref="jbr-anno" }
@@ -30,6 +31,7 @@ logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "lo
 midnight-config = { module = "org.wallentines:midnightcfg-api", version.ref="mdconfig" }
 midnight-config-json = { module = "org.wallentines:midnightcfg-codec-json", version.ref="mdconfig" }
 midnight-proxy = { module = "org.wallentines:midnightproxy-api", version.ref="mdproxy" }
-midnight-proxy-jwt = { module = "org.wallentines:midnightproxy-api-jwt", version.ref="mdproxy" }
+
+jwtutil = { module = "org.wallentines:jwtutil-api", version.ref="jwtutil" }
 
 apache-httpclient = { module = "org.apache.httpcomponents.client5:httpclient5", version.ref = "apache" }

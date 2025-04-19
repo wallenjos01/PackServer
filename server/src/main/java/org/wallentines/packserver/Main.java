@@ -2,8 +2,8 @@ package org.wallentines.packserver;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.wallentines.mdproxy.jwt.FileKeyStore;
-import org.wallentines.mdproxy.jwt.KeyType;
+import org.wallentines.jwt.FileKeyStore;
+import org.wallentines.jwt.KeyType;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;

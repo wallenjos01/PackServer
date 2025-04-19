@@ -1,11 +1,12 @@
 package org.wallentines.packserver;
 
 import org.jetbrains.annotations.Nullable;
-import org.wallentines.mcore.text.Component;
-import org.wallentines.mcore.text.ConfigSerializer;
+import org.wallentines.mdcfg.serializer.InlineSerializer;
 import org.wallentines.mdcfg.serializer.ObjectSerializer;
 import org.wallentines.mdcfg.serializer.Serializer;
 import org.wallentines.mdproxy.ResourcePack;
+import org.wallentines.pseudonym.text.Component;
+import org.wallentines.pseudonym.text.ConfigTextParser;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -68,14 +69,16 @@ public record PackEntry(UUID uuid, @Nullable String server, @Nullable String tag
 
     }
 
+    private static final Serializer<Component> COMPONENT_SERIALIZER = InlineSerializer.of(ConfigTextParser.INSTANCE::serialize, ConfigTextParser.INSTANCE::parse);
+
     public static final Serializer<PackEntry> SERIALIZER = ObjectSerializer.create(
             Serializer.UUID.entry("uuid", PackEntry::uuid),
             Serializer.STRING.entry("server", PackEntry::server).optional(),
             Serializer.STRING.entry("tag", PackEntry::server).optional(),
             Serializer.STRING.entry("hash", PackEntry::server).optional(),
-            ConfigSerializer.INSTANCE.entry("prompt", PackEntry::prompt).optional(),
+            COMPONENT_SERIALIZER.entry("prompt", PackEntry::prompt).optional(),
             Serializer.BOOLEAN.entry("required", PackEntry::required).orElse(false),
-            ConfigSerializer.INSTANCE.entry("kick_message", PackEntry::kickMessage).optional(),
+            COMPONENT_SERIALIZER.entry("kick_message", PackEntry::kickMessage).optional(),
             PackEntry::new
     ).or(Serializer.STRING.flatMap(PackEntry::tag, PackEntry::new));
 

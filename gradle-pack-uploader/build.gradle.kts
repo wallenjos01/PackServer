@@ -17,7 +17,7 @@ repositories {
 }
 
 dependencies {
-    implementation("net.fabricmc:fabric-loom:1.9-SNAPSHOT")
+    implementation("net.fabricmc:fabric-loom:1.10-SNAPSHOT")
     implementation(libs.midnight.config)
     implementation(libs.midnight.config.json)
     implementation(libs.apache.httpclient)

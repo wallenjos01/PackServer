@@ -8,8 +8,8 @@ import io.netty.handler.codec.http.multipart.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.wallentines.mdcfg.serializer.SerializeResult;
-import org.wallentines.mdproxy.jwt.JWT;
-import org.wallentines.mdproxy.jwt.JWTReader;
+import org.wallentines.jwt.JWT;
+import org.wallentines.jwt.JWTReader;
 
 import java.io.IOException;
 import java.io.InputStream;

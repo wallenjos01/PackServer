@@ -7,8 +7,8 @@ import org.wallentines.mdcfg.ConfigObject;
 import org.wallentines.mdcfg.ConfigSection;
 import org.wallentines.mdcfg.codec.DecodeException;
 import org.wallentines.mdcfg.codec.JSONCodec;
-import org.wallentines.mdproxy.jwt.JWT;
-import org.wallentines.mdproxy.jwt.JWTReader;
+import org.wallentines.jwt.JWT;
+import org.wallentines.jwt.JWTReader;
 
 import java.io.IOException;
 import java.io.InputStream;

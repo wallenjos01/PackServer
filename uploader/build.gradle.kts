@@ -7,7 +7,7 @@ configurations["shadow"].extendsFrom(configurations["implementation"])
 
 dependencies {
 
-    implementation(libs.midnight.proxy.jwt)
+    implementation(libs.jwtutil)
     implementation(libs.apache.httpclient)
     implementation("commons-cli:commons-cli:1.9.0")
 

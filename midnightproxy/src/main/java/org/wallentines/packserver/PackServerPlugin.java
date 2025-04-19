@@ -3,8 +3,6 @@ package org.wallentines.packserver;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.wallentines.mcore.MidnightCoreAPI;
-import org.wallentines.mcore.text.Component;
 import org.wallentines.mdcfg.ConfigList;
 import org.wallentines.mdcfg.ConfigObject;
 import org.wallentines.mdcfg.ConfigSection;
@@ -18,7 +16,11 @@ import org.wallentines.mdproxy.ResourcePack;
 import org.wallentines.mdproxy.packet.ServerboundHandshakePacket;
 import org.wallentines.mdproxy.packet.common.ServerboundResourcePackStatusPacket;
 import org.wallentines.mdproxy.plugin.Plugin;
-import org.wallentines.midnightlib.registry.Registry;
+import org.wallentines.mdcfg.registry.Registry;
+import org.wallentines.pseudonym.text.Component;
+import org.wallentines.pseudonym.text.Content;
+import org.wallentines.pseudonym.text.ImmutableComponent;
+import org.wallentines.pseudonym.text.Style;
 
 import java.io.IOException;
 import java.net.URI;
@@ -36,10 +38,10 @@ public class PackServerPlugin implements Plugin {
             .with("routes", new ConfigSection())
             .with("global", new ConfigList());
     private static final Logger log = LoggerFactory.getLogger(PackServerPlugin.class);
-    private static final Component DEFAULT_KICK_MESSAGE = Component.translate("multiplayer.requiredTexturePrompt.disconnect");
+    private static final Component DEFAULT_KICK_MESSAGE = new ImmutableComponent(new Content.Translate("multiplayer.requiredTexturePrompt.disconnect"), Style.EMPTY, Collections.emptyList());
     private static final Serializer<URI> URI_SERIALIZER = Serializer.STRING.flatMap(URI::toString, URI::create);
 
-    private final FileWrapper<ConfigObject> config;
+    private FileWrapper<ConfigObject> config;
 
     private Map<String, URI> servers;
     private Map<UUID, Component> kickMessages;
@@ -48,15 +50,6 @@ public class PackServerPlugin implements Plugin {
 
     public PackServerPlugin() {
 
-        Path configFolder = MidnightCoreAPI.GLOBAL_CONFIG_DIRECTORY.get().resolve("pack_server");
-        try { Files.createDirectories(configFolder); } catch (IOException e) {
-            throw new RuntimeException("Could not create messenger directory", e);
-        }
-
-        this.config = MidnightCoreAPI.FILE_CODEC_REGISTRY.findOrCreate(ConfigContext.INSTANCE, "config", configFolder, DEFAULT_CONFIG);
-        config.save();
-
-        reload();
     }
 
     @Nullable
@@ -108,6 +101,16 @@ public class PackServerPlugin implements Plugin {
     @Override
     public void initialize(Proxy proxy) {
 
+
+        Path configFolder = proxy.getPluginManager().configFolder().resolve("pack_server");
+        try { Files.createDirectories(configFolder); } catch (IOException e) {
+            throw new RuntimeException("Could not create messenger directory", e);
+        }
+
+        this.config = proxy.fileCodecRegistry().findOrCreate(ConfigContext.INSTANCE, "config", configFolder, DEFAULT_CONFIG);
+        config.save();
+
+        reload();
         proxy.getCommands().register("ps", (sender, args) -> {
             if(args.length == 2 && args[1].equals("reload")) {
                 reload();

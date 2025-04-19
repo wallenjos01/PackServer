@@ -1,7 +1,7 @@
 package org.wallentines.packserver;
 
 import org.wallentines.mdcfg.ConfigSection;
-import org.wallentines.mdproxy.jwt.*;
+import org.wallentines.jwt.*;
 import org.wallentines.packserver.netty.ConnectionManager;
 
 import java.io.IOException;
