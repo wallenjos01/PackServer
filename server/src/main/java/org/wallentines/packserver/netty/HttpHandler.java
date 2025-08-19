@@ -5,42 +5,54 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.wallentines.packserver.WebServer;
 
 public class HttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
+    private static final Logger LOGGER =
+        LoggerFactory.getLogger(HttpHandler.class);
     private final WebServer server;
 
-    public HttpHandler(WebServer server) {
-        this.server = server;
-    }
+    public HttpHandler(WebServer server) { this.server = server; }
 
     @Override
-    public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
+    public void channelReadComplete(ChannelHandlerContext ctx)
+        throws Exception {
         ctx.flush();
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest req) throws Exception {
+    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest req)
+        throws Exception {
 
-        if(!req.decoderResult().isSuccess() || req.headers().contains(HttpHeaderNames.UPGRADE, HttpHeaderValues.WEBSOCKET, true)) {
-            sendHttpResponse(ctx, req, new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.BAD_REQUEST));
+        if (!req.decoderResult().isSuccess() ||
+            req.headers().contains(HttpHeaderNames.UPGRADE,
+                                   HttpHeaderValues.WEBSOCKET, true)) {
+            sendHttpResponse(
+                ctx, req,
+                new DefaultFullHttpResponse(req.protocolVersion(),
+                                            HttpResponseStatus.BAD_REQUEST));
             return;
         }
 
         String path = req.uri();
-        if(!path.startsWith(server.baseUrl())) {
-            sendHttpResponse(ctx, req, new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.NOT_FOUND));
+        if (!path.startsWith(server.baseUrl())) {
+            sendHttpResponse(
+                ctx, req,
+                new DefaultFullHttpResponse(req.protocolVersion(),
+                                            HttpResponseStatus.NOT_FOUND));
             return;
         }
 
         path = path.substring(server.baseUrl().length());
-        if(path.startsWith("/")) {
+        if (path.startsWith("/")) {
             path = path.substring(1);
         }
 
         int paramsStart = path.indexOf('?');
-        if(paramsStart != -1) {
+        if (paramsStart != -1) {
             path = path.substring(0, paramsStart);
         }
 
@@ -52,15 +64,26 @@ public class HttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                 case "delete" -> server.deleteHandler().handle(req, ctx);
                 case "hash" -> server.hashHandler().handle(req, ctx);
                 case "tag" -> server.tagHandler().handle(req, ctx);
-                default -> new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.NOT_FOUND);
+                default ->
+                    new DefaultFullHttpResponse(req.protocolVersion(),
+                                                HttpResponseStatus.NOT_FOUND);
             };
             sendHttpResponse(ctx, req, res);
         } catch (Throwable t) {
-            sendHttpResponse(ctx, req, new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.INTERNAL_SERVER_ERROR));
+
+            LOGGER.error("An exception occurred while processing a request!",
+                         t);
+
+            sendHttpResponse(ctx, req,
+                             new DefaultFullHttpResponse(
+                                 req.protocolVersion(),
+                                 HttpResponseStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
-    private static void sendHttpResponse(ChannelHandlerContext ctx, FullHttpRequest req, FullHttpResponse res) {
+    private static void sendHttpResponse(ChannelHandlerContext ctx,
+                                         FullHttpRequest req,
+                                         FullHttpResponse res) {
         // Generate an error page if response getStatus code is not OK (200).
         HttpResponseStatus responseStatus = res.status();
         if (responseStatus.code() != 200) {

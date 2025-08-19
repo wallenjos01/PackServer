@@ -31,7 +31,10 @@ public class Util {
             return null;
 
         String tag = matcher.group(1);
-        String version = matcher.groupCount() < 2 ? "latest" : matcher.group(2);
+        String version = matcher.group(2);
+        if (version.isEmpty()) {
+            version = "latest";
+        }
 
         return new T2<>(tag, version);
     }

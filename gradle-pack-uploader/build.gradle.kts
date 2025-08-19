@@ -32,7 +32,16 @@ publishing {
 
     if (project.hasProperty("pubUrl")) {
 
-        val url: String = project.properties["pubUrl"] as String
+        var url: String = project.properties["pubUrl"] as String
+        val repo = project.properties["pubRepo"]
+
+        if(repo != null) {
+            if(!url.endsWith("/")) {
+                url += "/"
+            }
+            url += repo
+        }
+
         repositories.maven(url) {
             name = "pub"
             credentials(PasswordCredentials::class.java)

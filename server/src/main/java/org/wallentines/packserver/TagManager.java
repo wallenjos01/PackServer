@@ -84,7 +84,12 @@ public class TagManager implements FileSupplier {
     public String getHash(String tag) {
 
         return cache.computeIfAbsent(tag, k -> {
-            try (InputStream is = Files.newInputStream(get(tag))) {
+            Path tagEntry = get(tag);
+            if (tagEntry == null || !Files.isRegularFile(tagEntry)) {
+                return null;
+            }
+
+            try (InputStream is = Files.newInputStream(tagEntry)) {
                 String bytes = new String(is.readAllBytes());
                 if (!Util.isHexadecimal(bytes)) {
                     return null;

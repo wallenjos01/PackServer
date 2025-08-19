@@ -1,5 +1,26 @@
 package org.wallentines.gradle.packserver;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
+import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
+import javax.inject.Inject;
 import net.fabricmc.loom.api.LoomGradleExtensionAPI;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
@@ -25,46 +46,21 @@ import org.wallentines.mdcfg.ConfigSection;
 import org.wallentines.mdcfg.codec.JSONCodec;
 import org.wallentines.mdcfg.serializer.ConfigContext;
 
-import javax.inject.Inject;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileTime;
-import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
-import java.time.Instant;
-import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
-
 public class PackUploaderExtension {
 
     private final List<UploadInfo> uploadUrls = new ArrayList<>();
     private String description;
 
-    private record UploadInfo(String url, String token, @Nullable String tag) { }
+    private record UploadInfo(String url, String token, @Nullable String tag) {}
 
     public PackUploaderExtension(Project project) {
 
         project.getTasks().register("buildPack", BuildPackTask.class, this);
         project.getTasks().register("uploadPack", UploadTask.class, this);
         this.description = project.getRootProject().getName();
-
     }
 
-    public String getDescription() {
-        return description;
-    }
+    public String getDescription() { return description; }
 
     public void setDescription(String description) {
         this.description = description;
@@ -72,28 +68,35 @@ public class PackUploaderExtension {
 
     public void uploadTo(String packServerUrl, String token) {
 
-        if(!packServerUrl.endsWith("/")) packServerUrl = packServerUrl + "/";
+        if (!packServerUrl.endsWith("/"))
+            packServerUrl = packServerUrl + "/";
         this.uploadUrls.add(new UploadInfo(packServerUrl, token, null));
     }
 
     public void uploadTo(String packServerUrl, String token, String tag) {
 
-        if(!packServerUrl.endsWith("/")) packServerUrl = packServerUrl + "/";
+        if (!packServerUrl.endsWith("/"))
+            packServerUrl = packServerUrl + "/";
         this.uploadUrls.add(new UploadInfo(packServerUrl, token, tag));
     }
 
-    public static class BuildPackTask extends DefaultTask implements Action<Task> {
-
+    public static class BuildPackTask
+        extends DefaultTask implements Action<Task> {
 
         private final PackUploaderExtension extension;
         private final RegularFileProperty outputZip;
         private final RegularFileProperty outputHash;
 
-
         @Inject
         public BuildPackTask(PackUploaderExtension extension) {
             this.extension = extension;
-            Path packDir = getProject().getLayout().getBuildDirectory().getAsFile().get().toPath().resolve("packs");
+            Path packDir = getProject()
+                               .getLayout()
+                               .getBuildDirectory()
+                               .getAsFile()
+                               .get()
+                               .toPath()
+                               .resolve("packs");
 
             this.outputZip = getProject().getObjects().fileProperty();
             this.outputHash = getProject().getObjects().fileProperty();
@@ -129,29 +132,38 @@ public class PackUploaderExtension {
         @Override
         public void execute(Task task) {
 
-
             Project project = getProject();
-            SourceSetContainer sourceSets = project.getExtensions().getByType(SourceSetContainer.class);
+            SourceSetContainer sourceSets =
+                project.getExtensions().getByType(SourceSetContainer.class);
             byte[] buffer = new byte[4096];
 
             // Find Resource Pack version
-            SourceSet set = sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
-            LoomGradleExtensionAPI ext = project.getExtensions().getByType(LoomGradleExtensionAPI.class);
+            SourceSet set =
+                sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
+            LoomGradleExtensionAPI ext =
+                project.getExtensions().getByType(LoomGradleExtensionAPI.class);
 
-            File f = ext.getNamedMinecraftJars().getFiles().stream().findAny().orElseThrow();
-            if(!f.exists()) {
-                throw new RuntimeException("Could not find minecraft server jar");
+            File f = ext.getNamedMinecraftJars()
+                         .getFiles()
+                         .stream()
+                         .findAny()
+                         .orElseThrow();
+            if (!f.exists()) {
+                throw new RuntimeException(
+                    "Could not find minecraft server jar");
             }
 
             ConfigSection packMeta;
-            try(ZipFile zf = new ZipFile(f)) {
+            try (ZipFile zf = new ZipFile(f)) {
                 ZipEntry ent = zf.getEntry("version.json");
 
-                ConfigSection config = JSONCodec.loadConfig(zf.getInputStream(ent)).asSection();
-                int packFormat = config.getSection("pack_version").getInt("resource");
+                ConfigSection config =
+                    JSONCodec.loadConfig(zf.getInputStream(ent)).asSection();
+                int packFormat =
+                    config.getSection("pack_version").getInt("resource");
 
-                packMeta = new ConfigSection()
-                        .with("pack", new ConfigSection()
+                packMeta = new ConfigSection().with(
+                    "pack", new ConfigSection()
                                 .with("pack_format", packFormat)
                                 .with("description", extension.description));
 
@@ -159,26 +171,33 @@ public class PackUploaderExtension {
                 throw new RuntimeException(ex);
             }
 
-
             // Export resource pack
             Path packFile = this.outputZip.getAsFile().get().toPath();
-            try { Files.createDirectories(packFile.getParent()); } catch (IOException ex) {
+            try {
+                Files.createDirectories(packFile.getParent());
+            } catch (IOException ex) {
                 throw new RuntimeException(ex);
             }
 
-            try(ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(packFile))) {
+            try (ZipOutputStream zos =
+                     new ZipOutputStream(Files.newOutputStream(packFile))) {
 
                 zos.putNextEntry(zipEntry("pack.mcmeta"));
-                String meta = JSONCodec.minified().encodeToString(ConfigContext.INSTANCE, packMeta);
+                String meta = JSONCodec.minified().encodeToString(
+                    ConfigContext.INSTANCE, packMeta);
                 zos.write(meta.getBytes());
                 zos.closeEntry();
 
-                for(File resourceDir : set.getResources().getSourceDirectories().getFiles()) {
+                for (File resourceDir :
+                     set.getResources().getSourceDirectories().getFiles()) {
                     Path assetsDir = resourceDir.toPath().resolve("assets");
                     Files.walkFileTree(assetsDir, new SimpleFileVisitor<>() {
                         @Override
-                        public @NotNull FileVisitResult visitFile(Path file, @NotNull BasicFileAttributes attrs) throws IOException {
-                            zos.putNextEntry(zipEntry("assets/" + assetsDir.relativize(file)));
+                        public @NotNull FileVisitResult visitFile(
+                            Path file, @NotNull BasicFileAttributes attrs)
+                            throws IOException {
+                            zos.putNextEntry(zipEntry(
+                                "assets/" + assetsDir.relativize(file)));
                             try (InputStream is = Files.newInputStream(file)) {
                                 int bytesRead;
                                 while ((bytesRead = is.read(buffer)) != -1) {
@@ -190,17 +209,17 @@ public class PackUploaderExtension {
                         }
                     });
                 }
-            } catch(IOException ex) {
+            } catch (IOException ex) {
                 throw new RuntimeException(ex);
             }
 
             // Compute sha1
             String sha1;
-            try(InputStream is = Files.newInputStream(packFile)) {
+            try (InputStream is = Files.newInputStream(packFile)) {
 
                 MessageDigest digest = MessageDigest.getInstance("SHA-1");
                 int bytesRead;
-                while((bytesRead = is.read(buffer)) != -1) {
+                while ((bytesRead = is.read(buffer)) != -1) {
                     digest.update(buffer, 0, bytesRead);
                 }
 
@@ -211,19 +230,19 @@ public class PackUploaderExtension {
                 throw new RuntimeException(ex);
             }
 
-
             Path sha1File = this.outputHash.getAsFile().get().toPath();
-            try { Files.createDirectories(sha1File.getParent()); } catch (IOException ex) {
+            try {
+                Files.createDirectories(sha1File.getParent());
+            } catch (IOException ex) {
                 throw new RuntimeException(ex);
             }
-            try(OutputStream os = Files.newOutputStream(sha1File)) {
+            try (OutputStream os = Files.newOutputStream(sha1File)) {
                 os.write(sha1.getBytes());
             } catch (IOException ex) {
                 throw new RuntimeException(ex);
             }
         }
     }
-
 
     public static class UploadTask extends DefaultTask implements Action<Task> {
 
@@ -240,56 +259,81 @@ public class PackUploaderExtension {
         public void execute(@NotNull Task task) {
 
             Project project = getProject();
-            BuildPackTask bpt = (BuildPackTask) project.getTasks().getByName("buildPack");
+            BuildPackTask bpt =
+                (BuildPackTask)project.getTasks().getByName("buildPack");
 
             // Upload pack
-            if(this.extension.uploadUrls.isEmpty()) {
+            if (this.extension.uploadUrls.isEmpty()) {
                 return;
             }
 
             String sha1;
-            try(InputStream is = Files.newInputStream(bpt.outputHash.getAsFile().get().toPath())) {
+            try (InputStream is = Files.newInputStream(
+                     bpt.outputHash.getAsFile().get().toPath())) {
                 sha1 = new String(is.readAllBytes());
             } catch (IOException ex) {
                 throw new RuntimeException(ex);
             }
 
-            try(ExecutorService executor = Executors.newFixedThreadPool(Math.min(4, this.extension.uploadUrls.size()))) {
+            try (ExecutorService executor = Executors.newFixedThreadPool(
+                     Math.min(4, this.extension.uploadUrls.size()))) {
                 for (UploadInfo ent : extension.uploadUrls) {
                     executor.execute(() -> {
-
-                        try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
-                            HttpGet get = new HttpGet(ent.url() + "has?hash=" + sha1);
+                        try (CloseableHttpClient client =
+                                 HttpClientBuilder.create().build()) {
+                            HttpGet get =
+                                new HttpGet(ent.url() + "has?hash=" + sha1);
 
                             HttpResponse res = client.execute(get);
                             if (res.getCode() == 200) { // Already uploaded
 
-                                if(ent.tag == null) return;
+                                if (ent.tag == null)
+                                    return;
 
                                 HttpPost post = new HttpPost(ent.url());
-                                String data = JSONCodec.minified().encodeToString(ConfigContext.INSTANCE, new ConfigSection()
-                                        .with("token", ent.token)
-                                        .with("hash", sha1)
-                                        .with("tag", ent.tag));
-                                byte[] bytes = data.getBytes(StandardCharsets.UTF_8);
-                                post.setEntity(new ByteArrayEntity(bytes, ContentType.APPLICATION_JSON));
+                                String data =
+                                    JSONCodec.minified().encodeToString(
+                                        ConfigContext.INSTANCE,
+                                        new ConfigSection()
+                                            .with("token", ent.token)
+                                            .with("hash", sha1)
+                                            .with("tag", ent.tag));
+                                byte[] bytes =
+                                    data.getBytes(StandardCharsets.UTF_8);
+                                post.setEntity(new ByteArrayEntity(
+                                    bytes, ContentType.APPLICATION_JSON));
                                 client.execute(post);
 
                             } else {
 
-                                HttpPost post = new HttpPost(ent.url() + "push");
-                                MultipartEntityBuilder builder = MultipartEntityBuilder.create()
-                                        .addPart("token", new StringBody(ent.token(), ContentType.DEFAULT_TEXT))
-                                        .addPart("data", new FileBody(bpt.outputZip.getAsFile().get(), ContentType.APPLICATION_OCTET_STREAM));
+                                HttpPost post =
+                                    new HttpPost(ent.url() + "push");
+                                MultipartEntityBuilder builder =
+                                    MultipartEntityBuilder.create()
+                                        .addPart("token",
+                                                 new StringBody(
+                                                     ent.token(),
+                                                     ContentType.DEFAULT_TEXT))
+                                        .addPart(
+                                            "data",
+                                            new FileBody(
+                                                bpt.outputZip.getAsFile().get(),
+                                                ContentType
+                                                    .APPLICATION_OCTET_STREAM));
 
-                                if(ent.tag != null) {
-                                    builder.addPart("tag", new StringBody(ent.tag, ContentType.DEFAULT_TEXT));
+                                if (ent.tag != null) {
+                                    builder.addPart(
+                                        "tag",
+                                        new StringBody(
+                                            ent.tag, ContentType.DEFAULT_TEXT));
                                 }
 
                                 post.setEntity(builder.build());
                                 res = client.execute(post);
                                 if (res.getCode() != 200) {
-                                    throw new RuntimeException("Could not upload resource pack to: " + ent.url);
+                                    throw new RuntimeException(
+                                        "Could not upload resource pack to: " +
+                                        ent.url + " (" + res.getCode() + ")");
                                 }
                             }
 
@@ -297,11 +341,8 @@ public class PackUploaderExtension {
                             throw new RuntimeException(ex);
                         }
                     });
-
                 }
             }
         }
-
     }
-
 }
