@@ -24,6 +24,14 @@ public class Main {
         Path packDir = cwd.resolve("packs");
         Path tagDir = cwd.resolve("tags");
 
+        try {
+            Files.createDirectories(packDir);
+            Files.createDirectories(tagDir);
+        } catch (IOException ex) {
+            log.error("Could not generate pack storage directory", ex);
+            return;
+        }
+
         if (args.length >= 1 && args[0].equals("prune")) {
 
             TagManager tm = new TagManager(tagDir);
@@ -51,14 +59,6 @@ public class Main {
             if (!baseUrl.startsWith("/")) {
                 baseUrl = "/" + baseUrl;
             }
-        }
-
-        try {
-            Files.createDirectories(packDir);
-            Files.createDirectories(tagDir);
-        } catch (IOException ex) {
-            log.error("Could not generate pack storage directory", ex);
-            return;
         }
 
         FileKeyStore ks = new FileKeyStore(cwd, Map.of(KeyType.AES, "key"));
