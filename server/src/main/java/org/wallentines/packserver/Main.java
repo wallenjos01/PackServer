@@ -1,18 +1,18 @@
 package org.wallentines.packserver;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.wallentines.jwt.FileKeyStore;
-import org.wallentines.jwt.KeyType;
-
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.util.Map;
+import java.util.stream.Collectors;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.wallentines.jwt.FileKeyStore;
+import org.wallentines.jwt.KeyType;
 
 public class Main {
 
@@ -24,17 +24,31 @@ public class Main {
         Path packDir = cwd.resolve("packs");
         Path tagDir = cwd.resolve("tags");
 
+        if (args.length >= 1 && args[0].equals("prune")) {
+
+            TagManager tm = new TagManager(tagDir);
+            PackManager pm = new PackManager(packDir);
+
+            log.info("Beginning prune of untagged packs...");
+
+            pm.prune(tm.getAllTaggedHashes().collect(
+                Collectors.toUnmodifiableSet()));
+
+            log.info("Prune complete!");
+            return;
+        }
+
         String portStr = System.getenv("PACK_SERVER_PORT");
         String baseUrlStr = System.getenv("PACK_SERVER_BASE_URL");
 
         int port = 8080;
         String baseUrl = "/";
-        if(portStr != null) {
+        if (portStr != null) {
             port = Integer.parseInt(portStr);
         }
-        if(baseUrlStr != null) {
+        if (baseUrlStr != null) {
             baseUrl = baseUrlStr;
-            if(!baseUrl.startsWith("/")) {
+            if (!baseUrl.startsWith("/")) {
                 baseUrl = "/" + baseUrl;
             }
         }
@@ -48,7 +62,7 @@ public class Main {
         }
 
         FileKeyStore ks = new FileKeyStore(cwd, Map.of(KeyType.AES, "key"));
-        if(ks.getKey("jwt", KeyType.AES) == null) {
+        if (ks.getKey("jwt", KeyType.AES) == null) {
 
             SecretKey key;
             try {
@@ -63,7 +77,8 @@ public class Main {
             ks.setKey("jwt", KeyType.AES, key);
         }
 
-        WebServer ws = new WebServer(port, baseUrl, ks.supplier("jwt", KeyType.AES), packDir, tagDir);
+        WebServer ws = new WebServer(
+            port, baseUrl, ks.supplier("jwt", KeyType.AES), packDir, tagDir);
         try {
             ws.start();
         } catch (Throwable th) {
@@ -73,13 +88,13 @@ public class Main {
         ConsoleHandler ch = new ConsoleHandler(ws);
         ch.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread("Proxy Shutdown Thread") {
-            @Override
-            public void run() {
-                ch.stop();
-                ws.shutdown();
-            }
-        });
+        Runtime.getRuntime().addShutdownHook(
+            new Thread("Proxy Shutdown Thread") {
+                @Override
+                public void run() {
+                    ch.stop();
+                    ws.shutdown();
+                }
+            });
     }
-
 }
