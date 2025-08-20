@@ -1,19 +1,5 @@
 package org.wallentines.packserver.uploader;
 
-import org.apache.commons.cli.*;
-import org.apache.hc.client5.http.classic.methods.HttpGet;
-import org.apache.hc.client5.http.classic.methods.HttpPost;
-import org.apache.hc.client5.http.entity.mime.*;
-import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
-import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
-import org.apache.hc.client5.http.utils.Hex;
-import org.apache.hc.core5.http.ContentType;
-import org.apache.hc.core5.http.HttpResponse;
-import org.apache.hc.core5.http.io.entity.ByteArrayEntity;
-import org.wallentines.mdcfg.ConfigSection;
-import org.wallentines.mdcfg.codec.JSONCodec;
-import org.wallentines.mdcfg.serializer.ConfigContext;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -27,6 +13,19 @@ import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import org.apache.commons.cli.*;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.entity.mime.*;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
+import org.apache.hc.client5.http.utils.Hex;
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.HttpResponse;
+import org.apache.hc.core5.http.io.entity.ByteArrayEntity;
+import org.wallentines.mdcfg.ConfigSection;
+import org.wallentines.mdcfg.codec.JSONCodec;
+import org.wallentines.mdcfg.serializer.ConfigContext;
 
 public class Main {
 
@@ -60,10 +59,10 @@ public class Main {
         }
 
         execute(cmd);
-
     }
 
-    private static String getSha1(InputStream is) throws IOException, GeneralSecurityException {
+    private static String getSha1(InputStream is)
+        throws IOException, GeneralSecurityException {
         MessageDigest digest = MessageDigest.getInstance("SHA-1");
         byte[] buffer = new byte[4096];
         int bytesRead;
@@ -73,7 +72,6 @@ public class Main {
         return Hex.encodeHexString(digest.digest());
     }
 
-
     private static void execute(CommandLine cmd) {
 
         String address = cmd.getOptionValue("s");
@@ -81,11 +79,14 @@ public class Main {
         String inputFileName = cmd.getOptionValue("i");
         String tag = cmd.getOptionValue("T");
 
-        if(!address.endsWith("/")) address += "/";
+        if (!address.endsWith("/"))
+            address += "/";
 
-        Path inputFile = Paths.get(System.getProperty("user.dir"), inputFileName);
-        if(!Files.exists(inputFile)) {
-            System.err.println("Input file " + inputFileName + " does not exist");
+        Path inputFile =
+            Paths.get(System.getProperty("user.dir"), inputFileName);
+        if (!Files.exists(inputFile)) {
+            System.err.println("Input file " + inputFileName +
+                               " does not exist");
             System.exit(1);
         }
 
@@ -93,23 +94,26 @@ public class Main {
         String sha1;
 
         // Make a zip file
-        if(Files.isDirectory(inputFile)) {
+        if (Files.isDirectory(inputFile)) {
 
-            try(ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                ZipOutputStream zos = new ZipOutputStream(baos)) {
+            try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                 ZipOutputStream zos = new ZipOutputStream(baos)) {
 
                 Files.walkFileTree(inputFile, new SimpleFileVisitor<>() {
                     @Override
-                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                        ZipEntry ent = new ZipEntry(inputFile.relativize(file).toString());
+                    public FileVisitResult visitFile(Path file,
+                                                     BasicFileAttributes attrs)
+                        throws IOException {
+                        ZipEntry ent =
+                            new ZipEntry(inputFile.relativize(file).toString());
                         ent.setCreationTime(FileTime.from(Instant.EPOCH));
                         ent.setLastModifiedTime(FileTime.from(Instant.EPOCH));
                         ent.setLastAccessTime(FileTime.from(Instant.EPOCH));
                         zos.putNextEntry(ent);
-                        try(InputStream is = Files.newInputStream(file)) {
+                        try (InputStream is = Files.newInputStream(file)) {
                             byte[] buffer = new byte[4096];
                             int bytesRead;
-                            while((bytesRead = is.read(buffer)) != -1) {
+                            while ((bytesRead = is.read(buffer)) != -1) {
                                 zos.write(buffer, 0, bytesRead);
                             }
                         }
@@ -123,7 +127,9 @@ public class Main {
                 baos.flush();
 
                 byte[] bytes = baos.toByteArray();
-                dataBody = new ByteArrayBody(bytes, ContentType.APPLICATION_OCTET_STREAM, inputFile.getFileName().toString());
+                dataBody = new ByteArrayBody(
+                    bytes, ContentType.APPLICATION_OCTET_STREAM,
+                    inputFile.getFileName().toString());
                 sha1 = getSha1(new ByteArrayInputStream(bytes));
 
             } catch (IOException | GeneralSecurityException ex) {
@@ -131,49 +137,56 @@ public class Main {
             }
 
         } else {
-            dataBody = new FileBody(inputFile.toFile(), ContentType.APPLICATION_OCTET_STREAM);
-            try(InputStream is = Files.newInputStream(inputFile)) {
+            dataBody = new FileBody(inputFile.toFile(),
+                                    ContentType.APPLICATION_OCTET_STREAM);
+            try (InputStream is = Files.newInputStream(inputFile)) {
                 sha1 = getSha1(is);
             } catch (GeneralSecurityException | IOException ex) {
                 throw new RuntimeException(ex);
             }
         }
 
-
         try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
-            HttpResponse res = client.execute(new HttpGet(address + "has?hash=" + sha1));
+            HttpResponse res =
+                client.execute(new HttpGet(address + "has?hash=" + sha1));
             if (res.getCode() == 200) { // Already uploaded
 
-                if(tag == null) {
-                    System.out.println("Success! The server already has a pack with that hash!");
+                if (tag == null) {
+                    System.out.println("Success! The server already has a " +
+                                       "pack with that hash!");
                     return;
                 }
 
                 HttpPost post = new HttpPost(address + "tag");
-                String data = JSONCodec.minified().encodeToString(ConfigContext.INSTANCE, new ConfigSection()
-                        .with("token", token)
-                        .with("hash", sha1)
-                        .with("tag", tag));
+                String data = JSONCodec.minified().encodeToString(
+                    ConfigContext.INSTANCE, new ConfigSection()
+                                                .with("token", token)
+                                                .with("hash", sha1)
+                                                .with("tag", tag));
                 byte[] bytes = data.getBytes(StandardCharsets.UTF_8);
-                post.setEntity(new ByteArrayEntity(bytes, ContentType.APPLICATION_JSON));
+                post.setEntity(
+                    new ByteArrayEntity(bytes, ContentType.APPLICATION_JSON));
                 client.execute(post);
-                System.out.println("Success! Tagged an existing pack with that hash!");
+                System.out.println(
+                    "Success! Tagged an existing pack with that hash!");
 
             } else {
 
                 HttpPost post = new HttpPost(address + "push");
-                MultipartEntityBuilder builder = MultipartEntityBuilder.create()
-                        .addPart("token", new StringBody(token, ContentType.DEFAULT_TEXT))
-                        .addPart("data", dataBody);
-
-                if(tag != null) {
-                    builder.addPart("tag", new StringBody(tag, ContentType.DEFAULT_TEXT));
-                }
+                MultipartEntityBuilder builder =
+                    MultipartEntityBuilder.create()
+                        .addPart("token", new StringBody(
+                                              token, ContentType.DEFAULT_TEXT))
+                        .addPart("data", dataBody)
+                        .addPart("tag",
+                                 new StringBody(tag, ContentType.DEFAULT_TEXT));
 
                 post.setEntity(builder.build());
                 res = client.execute(post);
                 if (res.getCode() != 200) {
-                    throw new RuntimeException("Could not upload resource pack to: " + address + "! Got code " + res.getCode());
+                    throw new RuntimeException(
+                        "Could not upload resource pack to: " + address +
+                        "! Got code " + res.getCode());
                 }
                 System.out.println("Success! Uploaded a new pack!");
             }
@@ -181,7 +194,5 @@ public class Main {
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
-
     }
-
 }

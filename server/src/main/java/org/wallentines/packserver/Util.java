@@ -11,7 +11,7 @@ public class Util {
         Pattern.compile("\\p{XDigit}+");
 
     public static final Pattern TAG_PATTERN =
-        Pattern.compile("([a-z][0-9A-Za-z-_]*):?([0-9A-Za-z-_]*)");
+        Pattern.compile("([a-z][0-9A-Za-z-_]*)(?::([0-9A-Za-z-_\\+\\.]+))?");
 
     public static boolean isHexadecimal(String input) {
         final Matcher matcher = HEXADECIMAL_PATTERN.matcher(input);
@@ -32,7 +32,7 @@ public class Util {
 
         String tag = matcher.group(1);
         String version = matcher.group(2);
-        if (version.isEmpty()) {
+        if (version == null) {
             version = "latest";
         }
 

@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -14,7 +15,7 @@ import org.wallentines.mdcfg.Tuples;
 public class TagManager implements FileSupplier {
 
     private final Path root;
-    private final Map<String, String> cache = new HashMap<>();
+    private final Map<String, Map<String, String>> cache = new HashMap<>();
 
     public TagManager(Path root) { this.root = root; }
 
@@ -46,13 +47,37 @@ public class TagManager implements FileSupplier {
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
-        cache.put(tag, hash);
+        cache.computeIfAbsent(parsed.p1, k -> new HashMap<>())
+            .put(parsed.p2, hash);
+    }
+
+    public void removeAll(String name) {
+        cache.remove(name);
+        try {
+            Files.deleteIfExists(root.resolve(name));
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    public Collection<String> getAllHashes(String name) {
+        if (!cache.containsKey(name))
+            return null;
+        return cache.get(name).values();
     }
 
     public void removeTag(String tag) {
-        cache.remove(tag);
+        Tuples.T2<String, String> parsed = Util.parseTag(tag);
+        if (parsed == null)
+            return;
+
+        Map<String, String> repo = cache.get(parsed.p1);
+        if (repo != null) {
+            repo.remove(parsed.p2);
+        }
+
         try {
-            Files.deleteIfExists(root.resolve(tag));
+            Files.deleteIfExists(root.resolve(parsed.p1).resolve(parsed.p2));
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
@@ -83,7 +108,11 @@ public class TagManager implements FileSupplier {
     @Nullable
     public String getHash(String tag) {
 
-        return cache.computeIfAbsent(tag, k -> {
+        Tuples.T2<String, String> parsed = Util.parseTag(tag);
+        Map<String, String> repo =
+            cache.computeIfAbsent(parsed.p1, k -> new HashMap<>());
+
+        return repo.computeIfAbsent(tag, k -> {
             Path tagEntry = get(tag);
             if (tagEntry == null || !Files.isRegularFile(tagEntry)) {
                 return null;

@@ -290,7 +290,8 @@ public class PackUploaderExtension {
                                 if (ent.tag == null)
                                     return;
 
-                                HttpPost post = new HttpPost(ent.url());
+                                String tagEndpoint = ent.url() + "tag";
+                                HttpPost post = new HttpPost(tagEndpoint);
                                 String data =
                                     JSONCodec.minified().encodeToString(
                                         ConfigContext.INSTANCE,
