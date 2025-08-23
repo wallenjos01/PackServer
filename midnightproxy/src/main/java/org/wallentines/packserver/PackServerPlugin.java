@@ -22,6 +22,7 @@ import org.wallentines.mdproxy.Proxy;
 import org.wallentines.mdproxy.ResourcePack;
 import org.wallentines.mdproxy.packet.ServerboundHandshakePacket;
 import org.wallentines.mdproxy.packet.common.ServerboundResourcePackStatusPacket;
+import org.wallentines.mdproxy.packet.common.ServerboundResourcePackStatusPacket.Action;
 import org.wallentines.mdproxy.plugin.Plugin;
 import org.wallentines.pseudonym.text.Component;
 import org.wallentines.pseudonym.text.Content;
@@ -50,8 +51,9 @@ public class PackServerPlugin implements Plugin {
 
     private Map<String, URI> servers;
     private Map<UUID, Component> kickMessages;
-    private Map<String, List<ResourcePack>> routePacks;
-    private List<ResourcePack> globalPacks;
+    private Map<UUID, CachedPack> packsById;
+    private Map<String, List<CachedPack>> routePacks;
+    private List<CachedPack> globalPacks;
 
     public PackServerPlugin() {}
 
@@ -89,15 +91,20 @@ public class PackServerPlugin implements Plugin {
             }
         }
 
-        Map<String, ResourcePack> finalPacks = new ConcurrentHashMap<>();
+        packsById = new HashMap<>();
+
+        Map<String, CachedPack> finalPacks = new ConcurrentHashMap<>();
         for (int i = 0; i < packs.getSize(); i++) {
             String id = packs.idAtIndex(i);
             PackEntry pack = packs.valueAtIndex(i);
 
-            finalPacks.put(id, pack.toPack(this));
+            CachedPack cached = new CachedPack(pack);
+
+            finalPacks.put(id, cached);
+            packsById.put(pack.uuid(), cached);
         }
 
-        InlineSerializer<ResourcePack> keySerializer =
+        InlineSerializer<CachedPack> keySerializer =
             InlineSerializer.of(rp -> "", finalPacks::get);
 
         routePacks =
@@ -152,16 +159,18 @@ public class PackServerPlugin implements Plugin {
                 }
 
                 List<CompletableFuture<?>> futures = new ArrayList<>();
-                for (ResourcePack pack : globalPacks) {
-                    futures.add(ev.p2.sendResourcePack(pack).thenAccept(
-                        pck -> onComplete(client, pck)));
+                for (CachedPack pack : globalPacks) {
+                    futures.add(
+                        ev.p2.sendResourcePack(pack.get())
+                            .thenAccept(pck -> onComplete(client, pck)));
                 }
 
                 String id = proxy.getBackends().getId(ev.p1);
                 if (id != null && routePacks.containsKey(id)) {
-                    for (ResourcePack pack : routePacks.get(id)) {
-                        futures.add(ev.p2.sendResourcePack(pack).thenAccept(
-                            pck -> onComplete(client, pck)));
+                    for (CachedPack pack : routePacks.get(id)) {
+                        futures.add(
+                            ev.p2.sendResourcePack(pack.get())
+                                .thenAccept(pck -> onComplete(client, pck)));
                     }
                 }
 
@@ -175,9 +184,47 @@ public class PackServerPlugin implements Plugin {
     private void onComplete(ClientConnection conn,
                             ServerboundResourcePackStatusPacket packet) {
         if (packet.action() ==
-                ServerboundResourcePackStatusPacket.Action.DECLINED &&
-            kickMessages.containsKey(packet.packId())) {
-            conn.disconnect(kickMessages.get(packet.packId()));
+            ServerboundResourcePackStatusPacket.Action.DECLINED) {
+            if (kickMessages.containsKey(packet.packId())) {
+                conn.disconnect(kickMessages.get(packet.packId()));
+            }
+        } else if (packet.action() == Action.DOWNLOAD_FAILED) {
+            CachedPack pck = packsById.get(packet.packId());
+            if (pck != null && !pck.failedRecently) {
+                conn.sendResourcePack(pck.forceGet());
+            }
+        }
+    }
+
+    private class CachedPack {
+        final PackEntry entry;
+        long cacheTime;
+        ResourcePack cachedPack;
+        boolean failedRecently;
+
+        CachedPack(PackEntry entry) { this.entry = entry; }
+
+        ResourcePack forceGet() {
+            synchronized (cachedPack) {
+
+                ResourcePack oldPack = cachedPack;
+                cachedPack = entry.toPack(PackServerPlugin.this);
+
+                if (!Objects.equals(oldPack, cachedPack)) {
+                    failedRecently = false;
+                }
+                cacheTime = System.currentTimeMillis();
+                return cachedPack;
+            }
+        }
+
+        ResourcePack get() {
+            synchronized (cachedPack) {
+                if (System.currentTimeMillis() - cacheTime > 86400L * 1000L) {
+                    forceGet();
+                }
+                return cachedPack;
+            }
         }
     }
 }

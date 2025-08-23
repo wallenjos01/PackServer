@@ -50,10 +50,13 @@ public class PackUploaderExtension {
 
     private final List<UploadInfo> uploadUrls = new ArrayList<>();
     private String description;
+    private Project project;
 
     private record UploadInfo(String url, String token, @Nullable String tag) {}
 
     public PackUploaderExtension(Project project) {
+
+        this.project = project;
 
         project.getTasks().register("buildPack", BuildPackTask.class, this);
         project.getTasks().register("uploadPack", UploadTask.class, this);
@@ -70,7 +73,8 @@ public class PackUploaderExtension {
 
         if (!packServerUrl.endsWith("/"))
             packServerUrl = packServerUrl + "/";
-        this.uploadUrls.add(new UploadInfo(packServerUrl, token, null));
+        this.uploadUrls.add(
+            new UploadInfo(packServerUrl, token, project.getName()));
     }
 
     public void uploadTo(String packServerUrl, String token, String tag) {

@@ -1,5 +1,8 @@
 package org.wallentines.packserver;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.util.UUID;
@@ -21,6 +24,20 @@ public record PackEntry(UUID uuid, @Nullable String server,
              false, null);
     }
 
+    private String getHash(URI baseUrl, String tag) {
+        URI hashUri = baseUrl.resolve("hash?tag=" + tag);
+        try {
+            HttpURLConnection conn =
+                (HttpURLConnection)hashUri.toURL().openConnection();
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(5000);
+            byte[] bytes = conn.getInputStream().readNBytes(40);
+            return new String(bytes);
+        } catch (IOException ex) {
+            return null;
+        }
+    }
+
     public ResourcePack toPack(PackServerPlugin plugin) {
 
         URI baseUrl = plugin.getServer(server);
@@ -31,11 +48,16 @@ public record PackEntry(UUID uuid, @Nullable String server,
             return null;
         }
 
-        URI finalUri = baseUrl.resolve("pack?" + tag == null ? ("hash=" + hash)
-                                                             : ("tag=" + tag));
+        String realHash = hash;
+        if (hash == null) {
+            realHash = getHash(baseUrl, tag);
+        }
+
+        URI finalUri = baseUrl.resolve(
+            "pack?" + hash == null ? ("tag=" + tag) : ("hash=" + hash));
 
         try {
-            return new ResourcePack(uuid, finalUri.toURL().toString(), hash,
+            return new ResourcePack(uuid, finalUri.toURL().toString(), realHash,
                                     required, prompt);
         } catch (MalformedURLException ex) {
             throw new RuntimeException(ex);
@@ -51,8 +73,8 @@ public record PackEntry(UUID uuid, @Nullable String server,
             .create(
                 Serializer.UUID.entry("uuid", PackEntry::uuid),
                 Serializer.STRING.entry("server", PackEntry::server).optional(),
-                Serializer.STRING.entry("tag", PackEntry::server).optional(),
-                Serializer.STRING.entry("hash", PackEntry::server).optional(),
+                Serializer.STRING.entry("tag", PackEntry::tag).optional(),
+                Serializer.STRING.entry("hash", PackEntry::hash).optional(),
                 COMPONENT_SERIALIZER.entry("prompt", PackEntry::prompt)
                     .optional(),
                 Serializer.BOOLEAN.entry("required", PackEntry::required)
